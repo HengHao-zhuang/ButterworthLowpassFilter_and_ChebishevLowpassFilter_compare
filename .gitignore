@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.matplotlib-cache/
+filter_comparison.png
