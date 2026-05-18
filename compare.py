@@ -222,6 +222,7 @@ def plot_bode(filters, cutoff_hz, ripple_db, output_dir):
 def plot_transition_zoom(filters, cutoff_hz, ripple_db, output_dir):
     freq_hz = np.linspace(0.35 * cutoff_hz, 2.2 * cutoff_hz, 3500)
 
+    # fig, axes = plt.subplots(2, 1, figsize=(7.2, 6.6), sharex=True)
     fig, axes = plt.subplots(2, 1, figsize=(7.2, 6.6), sharex=True)
     for name, filt in filters.items():
         h = zpk_freq_response(filt, freq_hz)
@@ -281,9 +282,9 @@ def plot_impulse_step(filters, cutoff_hz, output_dir):
         )
         ax_step.plot(time_s * 1e6, step, color=color, label=name)
         overshoot, settling, ripple_pp = ringing_metrics(time_s, step)
-        metric_lines.append(
-            f"{name}: overshoot={overshoot:.1f}%, settle~{settling * 1e6:.2f} us, late ripple={ripple_pp:.3f}"
-        )
+        # metric_lines.append(
+        #     f"{name}: overshoot={overshoot:.1f}%, settle~{settling * 1e6:.2f} us, late ripple={ripple_pp:.3f}"
+        # )
 
     ax_impulse.grid(True)
     ax_impulse.legend(loc="upper right")
@@ -293,10 +294,10 @@ def plot_impulse_step(filters, cutoff_hz, output_dir):
 
     ax_step.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax_step.grid(True)
-    ax_step.legend(loc="upper right")
-    ax_step.set_title("Step Response: Overshoot and Settling")
+    ax_step.legend(loc="lower right")
+    ax_step.set_title("Step Response")
     ax_step.set_xlabel("Time (us)")
-    ax_step.set_ylabel("Normalized output")
+    ax_step.set_ylabel("Output Voltage (V)")
     ax_step.text(
         0.98,
         0.05,
@@ -420,6 +421,47 @@ def plot_component_sensitivity(filters, cutoff_hz, ripple_db, order, output_dir)
     return path
 
 
+def plot_filter_order_response(cutoff_hz, ripple_db, output_dir):
+    freq_hz = np.logspace(4, 8, 3000)
+    orders = list(range(2, 22, 2))
+    wc = 2 * np.pi * cutoff_hz
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.4), sharey=True)
+    cmap = plt.get_cmap("viridis")
+
+    for ax, filter_name in zip(axes, ["Butterworth", "Chebyshev"]):
+        for idx, order in enumerate(orders):
+            if filter_name == "Butterworth":
+                z, p, k = signal.butter(
+                    order, wc, btype="low", analog=True, output="zpk"
+                )
+            else:
+                z, p, k = signal.cheby1(
+                    order, ripple_db, wc, btype="low", analog=True, output="zpk"
+                )
+            _, h = signal.freqs_zpk(z, p, k, worN=2 * np.pi * freq_hz)
+            ax.semilogx(
+                freq_hz / 1e6,
+                db(h),
+                color=cmap(idx / (len(orders) - 1)),
+                label=f"Order {order}",
+            )
+
+        ax.axvline(cutoff_hz / 1e6, color="black", linestyle="--", linewidth=1.0)
+        ax.set_title(filter_name)
+        ax.set_xlabel("Frequency (MHz)")
+        ax.set_ylabel("Magnitude (dB)")
+        ax.set_ylim(-120, 5)
+        ax.grid(True, which="both")
+        ax.legend(ncol=2, fontsize=8)
+
+    fig.suptitle("Effect of Filter Order on Frequency Response")
+    fig.tight_layout()
+    path = output_dir / "paper_filter_order_response.png"
+    fig.savefig(path)
+    return path
+
+
 def main():
     args = parse_args()
     configure_plot_style()
@@ -438,6 +480,7 @@ def main():
         plot_load_transient(filters, output_dir),
         plot_switching_noise_and_sca(filters, output_dir),
         plot_component_sensitivity(filters, cutoff_hz, ripple_db, order, output_dir),
+        plot_filter_order_response(cutoff_hz, ripple_db, output_dir),
     ]
 
     if not args.no_show:
